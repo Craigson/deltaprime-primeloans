@@ -27,15 +27,15 @@ Before a Smart Loan account can interact with the CUBE3 Protocol, it needs to be
 Consider the following scenario:
 
 - User wants to call `FunctionA` (with function signature `0xAaAaAaAa`) belonging to `FacetA`, which is a function protected by the CUBE3 protocol.
-- Before submitting the transaction onchain, the DeltaPrime dApp will call the CUBE3 Risk API to determine the risk of the transaction. If it is safe, the Risk API will provide at `320 byte` payload containing the function's calldata and a `signature` signed by the user's generated signing authority (A private key stored in the CUBE3 KMS). When the transaction is submitted onchain, the payload data is packed together at the end of the original calldata, adding and additional `320 bytes` to the transaction's original calldata.
+- Before submitting the transaction onchain, the DeltaPrime dApp will call the CUBE3 Risk API to determine the risk of the transaction. If it is safe, the Risk API will provide at `320 byte` payload containing the function's calldata and a `signature` signed by the user's generated signing authority (A private key stored in the CUBE3 KMS). When the transaction is submitted onchain, the payload data is packed together at the end of the original calldata, adding an additional `320 bytes` to the transaction's original calldata.
 
 ![cube3-calldata](./calldata.png)
 
 - The user submits the transaction onchain, which is received by their `SmartLoanDiamonBeaconProxy` account. The `implementation(0xAaAaAaAa)` staticcall is made to the Beacon, which returns the `CUBE3_FACET` address, because the call to the `CUBE3_ROUTER` returns `true`, indicating that this function is protected and the transaction needs to be validated.
-- The `SmartyLoanDiamonBeaconProxy` then delegatecalls to the `Cube3Facet`. Inside the facet's callback, the original calldata, along with the `Cube3SecurePayload` is sent to the `Cube3Router` for validation. If it succeeds, the `Cube3Router` returns successfully to the `Cube3Facet`. If it fails, the transaction is reverted.
+- The `SmartyLoanDiamonBeaconProxy` then delegatecalls to the `Cube3Facet`. Inside the facet's fallback, the original calldata along with the `Cube3SecurePayload` is sent to the `Cube3Router` for validation. If it succeeds, the `Cube3Router` returns successfully to the `Cube3Facet`. If it fails, the transaction is reverted.
 - Once the transaction has successfully executed the validation via the `Cube3Router`, the `320 bytes` payload is removed from the original calldata and the `Cube3Facet` then delegatecalls to the `FacetA` to execute the original function call.
 
-In essence, the `Cube3Facet` acts as a piece of middleware between the caller and the original facet, but only for functions that are protected by the CUBE3 protocol. The `Cube3Facet` is also responsible for registering Smart Loan accounts with the CUBE3 protocol.
+In essence, the `Cube3Facet` acts as a piece of middleware between the caller and the original facet, but only for functions that are protected by the CUBE3 protocol. The `Cube3Facet` is also responsible for registering Smart Loan accounts with the CUBE3 protocol. By introducing this new validation/middleware layer, protection can be added for any existing facets without needing to redeploy any contracts.
 
 ## Testing
 
