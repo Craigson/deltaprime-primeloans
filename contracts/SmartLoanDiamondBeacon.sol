@@ -5,6 +5,12 @@ pragma solidity 0.8.17;
 import {DiamondStorageLib} from "./lib/DiamondStorageLib.sol";
 import {IDiamondCut} from "./interfaces/IDiamondCut.sol";
 
+
+interface ICubeRouter {
+    function getIntegrationFnProtectionStatus(address integration, bytes4 sig) external view returns (bool);
+}
+
+
 /**
  * @title SmartLoanDiamondBeacon
  * A contract that is authorised to borrow funds using delegated credit.
@@ -15,6 +21,10 @@ import {IDiamondCut} from "./interfaces/IDiamondCut.sol";
  */
 
 contract SmartLoanDiamondBeacon {
+
+    address private constant CUBE3_ROUTER = 0x32EEce76C2C2e8758584A83Ee2F522D4788feA0f;
+    address private constant CUBE3_FACET = 0x33576C540de58b030A530A2c49CcE0363Ed2f83e;
+
     constructor(address _contractOwner, address _diamondCutFacet) payable {
         DiamondStorageLib.setContractOwner(_contractOwner);
         DiamondStorageLib.setContractPauseAdmin(_contractOwner);
@@ -61,11 +71,23 @@ contract SmartLoanDiamondBeacon {
         return ds._active;
     }
 
+    function getFacet(bytes4 sig) public view returns (address) {
+        DiamondStorageLib.DiamondStorage storage ds = DiamondStorageLib.diamondStorage();
+        return ds.selectorToFacetAndPosition[sig].facetAddress;
+    }
+
     function implementation(bytes4 funcSignature) public view notPausedOrUpgrading(funcSignature) returns (address) {
         DiamondStorageLib.DiamondStorage storage ds = DiamondStorageLib.diamondStorage();
-        // get facet from function selector
+        
+        // Check whether the facet's function is actively protected, if so, return the CUBE3 facet address
+        bool isProtected = ICubeRouter(CUBE3_ROUTER).getIntegrationFnProtectionStatus(msg.sender, funcSignature);
+        if (isProtected) {
+            return CUBE3_FACET;
+        }
+
         address facet = ds.selectorToFacetAndPosition[funcSignature].facetAddress;
         require(facet != address(0), "Diamond: Function does not exist");
+
         // Execute external function from facet using delegatecall and return any value.
         return facet;
     }
